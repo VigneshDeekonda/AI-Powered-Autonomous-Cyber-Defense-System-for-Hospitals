@@ -1,0 +1,256 @@
+@import url('https://api.fontshare.com/v2/css?f[]=general-sans@700,600,500&display=swap');
+
+.auth-page {
+  min-height: 100vh;
+  width: 100%;
+  background: #05080a;
+  background-image:
+    linear-gradient(rgba(62,207,207,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(62,207,207,0.04) 1px, transparent 1px);
+  background-size: 42px 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 720px;
+  background: #0a0f10;
+  border: 1px solid rgba(62, 207, 207, 0.15);
+  border-radius: 14px;
+  padding: 40px 48px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.02), 0 30px 80px rgba(0,0,0,0.6);
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  font-size: 13px;
+  cursor: pointer;
+  margin-bottom: 28px;
+  padding: 0;
+}
+
+.back-link:hover {
+  color: #3ecfcf;
+}
+
+.auth-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.Header h1 {
+  font-family: "General Sans", sans-serif !important;
+  font-size: 30px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  margin: 0 !important;
+}
+.auth-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: rgba(62,207,207,0.1);
+  border: 1px solid rgba(62,207,207,0.25);
+  color: #3ecfcf;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.auth-header h1 {
+  font-family: 'Outfit', sans-serif;
+  color: #fff;
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.6px;
+}
+
+.auth-header p {
+  color: rgba(255,255,255,0.4);
+  font-size: 13.5px;
+  margin: 0;
+}
+
+.auth-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 24px;
+  margin-bottom: 22px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.3px;
+}
+
+.field label span {
+  color: #e8b85c;
+}
+
+.field .hint {
+  font-size: 10.5px;
+  color: rgba(255,255,255,0.3);
+}
+
+.input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon {
+  position: absolute;
+  left: 12px;
+  color: rgba(255,255,255,0.3);
+}
+
+.input-wrap input,
+.field select {
+  width: 100%;
+  background: #0a1012;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 7px;
+  padding: 11px 14px 11px 38px;
+  font-size: 14px;
+  color: #fff;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field select {
+  padding-left: 14px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23555' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+.input-wrap input:focus,
+.field select:focus {
+  border-color: #3ecfcf;
+  box-shadow: 0 0 0 3px rgba(62,207,207,0.1);
+}
+
+.input-wrap input::placeholder {
+  color: rgba(255,255,255,0.2);
+}
+
+.eye-btn {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.3);
+  cursor: pointer;
+  display: flex;
+}
+
+.confirm-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 24px;
+  cursor: pointer;
+  padding: 13px 16px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+}
+
+.confirm-line input {
+  margin-top: 2px;
+  accent-color: #3ecfcf;
+}
+
+.confirm-line span {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: rgba(255,255,255,0.45);
+}
+
+.submit-btn {
+  width: 100%;
+  background: #3ecfcf;
+  color: #05080a;
+  border: none;
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.submit-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(62,207,207,0.25);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.switch-line {
+  text-align: center;
+  font-size: 13px;
+  color: rgba(255,255,255,0.35);
+  margin: 18px 0 0 0;
+}
+
+.switch-line a {
+  color: #3ecfcf;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.form-error {
+  background: rgba(232, 184, 92, 0.08);
+  border: 1px solid rgba(232, 184, 92, 0.25);
+  color: #e8b85c;
+  font-size: 12.5px;
+  padding: 10px 14px;
+  border-radius: 7px;
+  margin-bottom: 18px;
+}
+
+.auth-card-narrow {
+  max-width: 420px;
+}
+
+@media (max-width: 640px) {
+  .auth-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-card {
+    padding: 28px 24px;
+  }
+}
