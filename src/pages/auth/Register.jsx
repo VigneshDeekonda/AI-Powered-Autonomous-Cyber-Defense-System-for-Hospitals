@@ -71,10 +71,16 @@ function RegisterPage() {
         phone: form.phone,
         department: form.department,
         role: form.role,
+
+        // New accounts must be verified by an administrator.
+        accountType: "user",
+        approvalStatus: "pending",
+
         createdAt: new Date().toISOString(),
       });
 
-      navigate("/dashboard"); //change to wherever you want post-registration
+      navigate("/pending-approval");
+      
     } catch (err) {
       if (err.code === "auth/email-already-in-use") {
         setError("This email is already registered.");

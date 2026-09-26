@@ -245,7 +245,7 @@ export default function Dashboard() {
           <div className="dash-header-right">
             <div className="dash-user-info">
               <span className="dash-user-name">
-                {userProfile?.fullName || "Vignesh Suresh Deekonda"}
+                {userProfile?.fullName || currentUser?.displayName || "Error occurred: Refresh Page"}
               </span>
               <span className="dash-user-role">
                 {currentRole}

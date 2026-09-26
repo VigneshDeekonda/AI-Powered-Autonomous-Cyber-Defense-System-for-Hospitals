@@ -1,9 +1,17 @@
 import "@splinetool/viewer";
 import Register from "./pages/auth/Register";
 import Login from "./pages/auth/Login";
+import PendingApproval from "./pages/auth/PendingApproval";
+import AccountRejected from "./pages/auth/AccountRejected";
+
 import { Routes, Route, useNavigate } from "react-router-dom";
+
 import ProtectedRoute from "./components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
+
+import AdminRoute from "./components/AdminRoute";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+
 import "./App.css";
 
 function Hero() {
@@ -15,9 +23,12 @@ function Hero() {
         url="https://prod.spline.design/q3y4VLmVJTj58VDm/scene.splinecode"
         className="spline-bg"
       ></spline-viewer>
+
       <div className="spline-watermark-cover"></div>
+
       <div className="hero-content">
         <span className="eyebrow">Cybersecurity · AI</span>
+
         <h1>
           AI-Powered
           <br />
@@ -27,15 +38,24 @@ function Hero() {
           <br />
           System
         </h1>
+
         <p className="subtext">
           Real-time threat detection and response, driven entirely by AI —
           no human in the loop required.
         </p>
+
         <div className="cta-row">
-          <button className="btn-primary" onClick={() => navigate("/register")}>
+          <button
+            className="btn-primary"
+            onClick={() => navigate("/register")}
+          >
             Register
           </button>
-          <button className="btn-secondary" onClick={() => navigate("/login")}>
+
+          <button
+            className="btn-secondary"
+            onClick={() => navigate("/login")}
+          >
             Login
           </button>
         </div>
@@ -47,9 +67,26 @@ function Hero() {
 function App() {
   return (
     <Routes>
+      {/* Public */}
       <Route path="/" element={<Hero />} />
+
       <Route path="/register" element={<Register />} />
+
       <Route path="/login" element={<Login />} />
+
+      {/* Waiting for administrator */}
+      <Route
+        path="/pending-approval"
+        element={<PendingApproval />}
+      />
+
+      {/* Rejected */}
+      <Route
+        path="/account-rejected"
+        element={<AccountRejected />}
+      />
+
+      {/* Normal application */}
       <Route
         path="/dashboard"
         element={
@@ -58,12 +95,23 @@ function App() {
           </ProtectedRoute>
         }
       />
+
       <Route
         path="/dashboard/:roleId"
         element={
           <ProtectedRoute>
             <Dashboard />
           </ProtectedRoute>
+        }
+      />
+
+      {/* Admin */}
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
         }
       />
     </Routes>

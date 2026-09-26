@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
 const AuthContext = createContext();
@@ -11,36 +11,70 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null); // Firestore data: role, department etc.
+  const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
+    let unsubscribeProfile = null;
 
-      if (user) {
-        try {
-          const docRef = doc(db, "users", user.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setUserProfile(docSnap.data());
-          }
-        } catch (error) {
-          console.warn("Could not fetch user profile from Firestore:", error);
-        }
-      } else {
-        setUserProfile(null);
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      // Stop listening to the previous user's profile
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
       }
 
-      setLoading(false);
+      setCurrentUser(user);
+      setUserProfile(null);
+
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+
+      const userRef = doc(db, "users", user.uid);
+
+      // Listen for changes to the user's Firestore profile in real time.
+      // This means admin approval/rejection is detected automatically.
+      unsubscribeProfile = onSnapshot(
+        userRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            setUserProfile(snapshot.data());
+          } else {
+            console.warn("User profile does not exist in Firestore.");
+            setUserProfile(null);
+          }
+
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Could not fetch user profile:", error);
+          setUserProfile(null);
+          setLoading(false);
+        }
+      );
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeAuth();
+
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+      }
+    };
   }, []);
 
   const logout = () => signOut(auth);
 
-  const value = { currentUser, userProfile, logout, loading };
+  const value = {
+    currentUser,
+    userProfile,
+    logout,
+    loading,
+  };
 
   return (
     <AuthContext.Provider value={value}>
