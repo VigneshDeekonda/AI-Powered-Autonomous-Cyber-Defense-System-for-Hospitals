@@ -68,7 +68,7 @@ function LoginPage() {
       if (selectedRole) {
         sessionStorage.setItem("activeRole", selectedRole.title);
         sessionStorage.setItem("activeRoleId", selectedRole.id);
-        navigate(`/dashboard/${selectedRole.id}`);
+        navigate(`/dashboard/${selectedRole.id}/home`);
       } else {
         navigate("/dashboard");
       }
