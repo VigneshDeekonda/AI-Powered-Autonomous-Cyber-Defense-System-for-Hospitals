@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft,
   ShieldAlert,
@@ -16,6 +16,11 @@ import {
   Download,
   AlertTriangle,
   RotateCcw,
+  Loader2,
+  Check,
+  ShieldCheck,
+  X,
+  FileText,
 } from "lucide-react";
 
 export default function IncidentInvestigationView({
@@ -24,9 +29,16 @@ export default function IncidentInvestigationView({
   onUpdateStatus,
 }) {
   const [currentAlert, setCurrentAlert] = useState(alert);
-  const [statusUpdating, setStatusUpdating] = useState(false);
-  const [actionMessage, setActionMessage] = useState("");
-  const [reportGenerated, setReportGenerated] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [isVerifyingIsolation, setIsVerifyingIsolation] = useState(false);
+  const [isolationVerified, setIsolationVerified] = useState(false);
+  const [isExported, setIsExported] = useState(false);
+
+  useEffect(() => {
+    if (alert) {
+      setCurrentAlert(alert);
+    }
+  }, [alert]);
 
   if (!currentAlert) {
     return (
@@ -52,34 +64,206 @@ export default function IncidentInvestigationView({
     );
   }
 
+  // Floating notification trigger
+  const triggerToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 3500);
+  };
+
+  // Helper status badge styles
+  const getStatusBadgeStyle = (status) => {
+    switch (status) {
+      case "Detected":
+        return {
+          background: "rgba(56, 189, 248, 0.14)",
+          color: "#38bdf8",
+          border: "1px solid rgba(56, 189, 248, 0.35)",
+        };
+      case "Investigating":
+        return {
+          background: "rgba(245, 158, 11, 0.14)",
+          color: "#fbbf24",
+          border: "1px solid rgba(245, 158, 11, 0.35)",
+        };
+      case "Contained":
+        return {
+          background: "rgba(62, 207, 207, 0.14)",
+          color: "#3ecfcf",
+          border: "1px solid rgba(62, 207, 207, 0.35)",
+        };
+      case "Resolved":
+        return {
+          background: "rgba(16, 185, 129, 0.14)",
+          color: "#34d399",
+          border: "1px solid rgba(16, 185, 129, 0.35)",
+        };
+      case "Escalated":
+        return {
+          background: "rgba(239, 68, 68, 0.14)",
+          color: "#f87171",
+          border: "1px solid rgba(239, 68, 68, 0.35)",
+        };
+      default:
+        return {
+          background: "rgba(148, 163, 184, 0.14)",
+          color: "#94a3b8",
+          border: "1px solid rgba(148, 163, 184, 0.35)",
+        };
+    }
+  };
+
+  // Handle Detection Status transitions
   const handleStatusChange = (newStatus) => {
-    setStatusUpdating(true);
+    let newResponseStatus = currentAlert.responseStatus;
+    if (newStatus === "Resolved") {
+      newResponseStatus = "Threat Remediated & Mitigated";
+    } else if (newStatus === "Contained") {
+      newResponseStatus = "Autonomous VLAN Quarantine Active";
+    } else if (newStatus === "Escalated") {
+      newResponseStatus = "Escalated to Tier-3 CISO Incident Team";
+    } else if (newStatus === "Investigating") {
+      newResponseStatus = "Analyst Forensic Inspection Active";
+    } else if (newStatus === "Detected") {
+      newResponseStatus = "Autonomous Triage In Progress";
+    }
+
+    const updated = {
+      ...currentAlert,
+      detectionStatus: newStatus,
+      responseStatus: newResponseStatus,
+    };
+    setCurrentAlert(updated);
+
+    if (onUpdateStatus) {
+      onUpdateStatus(currentAlert.id, newStatus, newResponseStatus);
+    }
+
+    triggerToast(`Incident status updated to "${newStatus}"`);
+  };
+
+  // Handle Re-verify Isolation
+  const handleReverifyIsolation = () => {
+    setIsVerifyingIsolation(true);
     setTimeout(() => {
-      const updated = { ...currentAlert, detectionStatus: newStatus };
+      setIsVerifyingIsolation(false);
+      setIsolationVerified(true);
+
+      const verifiedResponseStatus = "VLAN 99 Quarantine Verified & Active";
+      const updated = {
+        ...currentAlert,
+        responseStatus: verifiedResponseStatus,
+      };
       setCurrentAlert(updated);
+
       if (onUpdateStatus) {
-        onUpdateStatus(currentAlert.id, newStatus);
+        onUpdateStatus(currentAlert.id, currentAlert.detectionStatus, verifiedResponseStatus);
       }
-      setStatusUpdating(false);
-      setActionMessage(`Alert status updated to "${newStatus}"`);
-      setTimeout(() => setActionMessage(""), 4000);
-    }, 400);
+
+      triggerToast(
+        `Network Isolation Verified: Target ${currentAlert.asset} (${currentAlert.assetIp}) is 100% quarantined on VLAN 99`
+      );
+    }, 600);
   };
 
-  const handleTriggerQuarantine = () => {
-    setActionMessage("Automated VLAN quarantine confirmed and enforced by AI engine.");
-    setTimeout(() => setActionMessage(""), 5000);
-  };
+  // Handle Export Incident Report
+  const handleExportIncidentReport = () => {
+    setIsExported(true);
 
-  const handleGenerateReport = () => {
-    setReportGenerated(true);
-    setActionMessage("HIPAA-compliant clinical cybersecurity incident dossier compiled.");
-    setTimeout(() => setActionMessage(""), 5000);
+    const reportContent = `================================================================================
+HOSPITAL CYBERSECURITY INCIDENT DOSSIER & REMEDIATION REPORT
+AI-Powered Autonomous Cyber Defense System (AI-ACDS)
+St. Jude Clinical Healthcare Security Operations Center
+================================================================================
+Report Generated  : ${new Date().toISOString()}
+Incident ID       : ${currentAlert.id}
+Detection Status  : ${currentAlert.detectionStatus}
+Response Status   : ${currentAlert.responseStatus}
+Risk Assessment   : ${currentAlert.riskScore}/100 [${currentAlert.severity} Severity]
+Timestamp         : ${currentAlert.timestamp} (${currentAlert.relativeTime || "Recent"})
+--------------------------------------------------------------------------------
+AFFECTED CLINICAL ASSET & NETWORK TELEMETRY
+Asset Identifier  : ${currentAlert.asset}
+IP Address        : ${currentAlert.assetIp}
+Quarantine VLAN   : VLAN 99 (Isolated)
+Device Category   : ${currentAlert.assetType}
+Department        : ${currentAlert.department}
+--------------------------------------------------------------------------------
+THREAT CLASSIFICATION & ADVERSARY TACTICS
+Threat Type       : ${currentAlert.threatType}
+CVE Reference     : ${currentAlert.cve}
+MITRE ATT&CK TTP  : ${currentAlert.mitreTechnique}
+Detection Engine  : AI Ensemble Neural IDS & IoMT Behavioral Telemetry Model
+Confidence Score  : ${currentAlert.confidence}
+--------------------------------------------------------------------------------
+INCIDENT DESCRIPTION
+${currentAlert.description}
+--------------------------------------------------------------------------------
+EXPLAINABLE AI (XAI) CAUSAL ROOT CAUSE VERDICT
+${currentAlert.xaiExplanation}
+--------------------------------------------------------------------------------
+AUTONOMOUS CONTAINMENT & MITIGATION ACTIONS EXECUTED
+${(currentAlert.actionsTaken || [
+  `Subnet ${currentAlert.assetIp} isolated to Quarantine VLAN 99`,
+  "Blocked outbound C2 communication over port 8443",
+  "Dispatched alert to Biomedical Engineering standby",
+])
+  .map((a, i) => `${i + 1}. ${a}`)
+  .join("\n")}
+--------------------------------------------------------------------------------
+OPERATIONAL DISPOSITION
+Current Status    : ${currentAlert.detectionStatus}
+Remediation Note  : Tamper-proof forensic telemetry compiled and cryptographically sealed.
+Incident Handler  : Network Administrator / Lead SOC Analyst
+================================================================================
+CONFIDENTIAL - CLINICAL CYBERSECURITY AUDIT RECORD - HIPAA / NIST SP 800-61 Rev. 2
+`;
+
+    const blob = new Blob([reportContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `INCIDENT_DOSSIER_${currentAlert.id}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    triggerToast(`Downloaded incident dossier for ${currentAlert.id}`);
+
+    setTimeout(() => {
+      setIsExported(false);
+    }, 2500);
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px", textAlign: "left" }}>
-      {/* Top Navigation & Status Notification */}
+      {/* Floating Bottom-Right Toast Notification */}
+      {toastMessage && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "28px",
+            right: "28px",
+            background: "#0e1620",
+            border: "1px solid #3ecfcf",
+            color: "#3ecfcf",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            fontSize: "13px",
+            fontWeight: "600",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <CheckCircle2 size={16} color="#3ecfcf" />
+          {toastMessage}
+        </div>
+      )}
+
+      {/* Top Navigation Row */}
       <div
         style={{
           display: "flex",
@@ -103,28 +287,13 @@ export default function IncidentInvestigationView({
             fontWeight: 600,
             cursor: "pointer",
             padding: 0,
+            transition: "opacity 0.15s ease",
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.8")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
         >
           <ArrowLeft size={16} /> Back to Security Alerts Queue
         </button>
-
-        {actionMessage && (
-          <div
-            style={{
-              background: "rgba(62, 207, 207, 0.12)",
-              border: "1px solid rgba(62, 207, 207, 0.35)",
-              color: "#3ecfcf",
-              fontSize: "12.5px",
-              padding: "6px 14px",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-            }}
-          >
-            <CheckCircle2 size={14} /> {actionMessage}
-          </div>
-        )}
       </div>
 
       {/* Main Incident Overview Header Card */}
@@ -208,9 +377,7 @@ export default function IncidentInvestigationView({
                 borderRadius: "6px",
                 fontSize: "11.5px",
                 fontWeight: 600,
-                background: "rgba(56, 189, 248, 0.14)",
-                color: "#38bdf8",
-                border: "1px solid rgba(56, 189, 248, 0.35)",
+                ...getStatusBadgeStyle(currentAlert.detectionStatus),
               }}
             >
               {currentAlert.detectionStatus}
@@ -249,10 +416,10 @@ export default function IncidentInvestigationView({
         <div style={{ textAlign: "left" }}>
           <h1
             style={{
-              margin: "0 0 6px 0",
-              fontSize: "22px",
+              fontSize: "20px",
               fontWeight: 700,
               color: "#ffffff",
+              margin: "0 0 8px 0",
               letterSpacing: "-0.3px",
               textAlign: "left",
             }}
@@ -262,10 +429,10 @@ export default function IncidentInvestigationView({
 
           <p
             style={{
-              margin: 0,
               fontSize: "13.5px",
-              lineHeight: "1.6",
-              color: "rgba(255, 255, 255, 0.65)",
+              color: "rgba(255, 255, 255, 0.7)",
+              lineHeight: "1.55",
+              margin: 0,
               textAlign: "left",
               maxWidth: "960px",
             }}
@@ -331,7 +498,7 @@ export default function IncidentInvestigationView({
               }}
             >
               <span style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "13px" }}>
-                IP & Subnet
+                IP &amp; Subnet
               </span>
               <span
                 style={{
@@ -369,7 +536,7 @@ export default function IncidentInvestigationView({
               }}
             >
               <span style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "13px" }}>
-                Hospital Ward / Dept
+                Hospital Ward / Department
               </span>
               <span style={{ color: "#ffffff", fontSize: "13px" }}>
                 {currentAlert.department}
@@ -405,7 +572,7 @@ export default function IncidentInvestigationView({
               }}
             >
               <span style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "13px" }}>
-                MITRE ATT&CK TTP
+                MITRE ATT&amp;CK TTP
               </span>
               <span
                 style={{
@@ -497,6 +664,80 @@ export default function IncidentInvestigationView({
         </div>
       </div>
 
+      {/* Isolation Confirmation Banner (shown when verified) */}
+      {isolationVerified && (
+        <div
+          style={{
+            background: "rgba(16, 185, 129, 0.08)",
+            border: "1px solid rgba(16, 185, 129, 0.35)",
+            borderRadius: "12px",
+            padding: "16px 20px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "16px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "50%",
+                background: "rgba(16, 185, 129, 0.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#10b981",
+                flexShrink: 0,
+              }}
+            >
+              <Lock size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: "700", color: "#ffffff", marginBottom: "2px" }}>
+                Network Isolation Verified &amp; Active
+              </div>
+              <div style={{ fontSize: "12.5px", color: "rgba(255, 255, 255, 0.65)" }}>
+                Target IP <strong style={{ color: "#3ecfcf" }}>{currentAlert.assetIp}</strong> is quarantined on{" "}
+                <strong style={{ color: "#ffffff" }}>VLAN 99</strong>. Packet drop rate: 100%. Ingress/Egress completely blocked.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <span
+              style={{
+                fontSize: "11.5px",
+                fontWeight: "700",
+                color: "#10b981",
+                background: "rgba(16, 185, 129, 0.15)",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+                padding: "5px 12px",
+                borderRadius: "6px",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}
+            >
+              Quarantine Enforced
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsolationVerified(false)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "rgba(255, 255, 255, 0.4)",
+                cursor: "pointer",
+                padding: "4px",
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Operator Action Bar: Status updates & Incident Response Controls */}
       <div
@@ -530,26 +771,47 @@ export default function IncidentInvestigationView({
             {["Detected", "Investigating", "Contained", "Resolved", "Escalated"].map(
               (status) => {
                 const isSelected = currentAlert.detectionStatus === status;
+                const statusColors = {
+                  Detected: "#38bdf8",
+                  Investigating: "#fbbf24",
+                  Contained: "#3ecfcf",
+                  Resolved: "#34d399",
+                  Escalated: "#f87171",
+                };
+                const activeColor = statusColors[status] || "#3ecfcf";
+
                 return (
                   <button
                     key={status}
                     type="button"
-                    disabled={statusUpdating}
                     onClick={() => handleStatusChange(status)}
                     style={{
-                      padding: "7px 14px",
+                      padding: "8px 16px",
                       borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: 600,
+                      fontSize: "12.5px",
+                      fontWeight: isSelected ? 700 : 500,
                       cursor: "pointer",
+                      fontFamily: "inherit",
                       border: isSelected
-                        ? "1px solid #3ecfcf"
+                        ? `1px solid ${activeColor}`
                         : "1px solid rgba(255, 255, 255, 0.1)",
                       background: isSelected
-                        ? "#3ecfcf"
+                        ? activeColor
                         : "rgba(255, 255, 255, 0.04)",
-                      color: isSelected ? "#05080a" : "rgba(255, 255, 255, 0.7)",
+                      color: isSelected ? "#05080a" : "rgba(255, 255, 255, 0.75)",
                       transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.borderColor = activeColor;
+                        e.currentTarget.style.color = "#ffffff";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.1)";
+                        e.currentTarget.style.color = "rgba(255, 255, 255, 0.75)";
+                      }
                     }}
                   >
                     {status}
@@ -562,45 +824,96 @@ export default function IncidentInvestigationView({
 
         {/* Action buttons */}
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          {/* Re-verify Isolation Button */}
           <button
             type="button"
-            onClick={handleTriggerQuarantine}
+            disabled={isVerifyingIsolation}
+            onClick={handleReverifyIsolation}
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
+              gap: "7px",
               padding: "10px 18px",
-              background: "rgba(239, 68, 68, 0.15)",
+              background: isVerifyingIsolation
+                ? "rgba(239, 68, 68, 0.25)"
+                : "rgba(239, 68, 68, 0.15)",
               border: "1px solid rgba(239, 68, 68, 0.35)",
               borderRadius: "8px",
               color: "#f87171",
               fontSize: "13px",
               fontWeight: 700,
-              cursor: "pointer",
+              cursor: isVerifyingIsolation ? "wait" : "pointer",
+              fontFamily: "inherit",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              if (!isVerifyingIsolation) {
+                e.currentTarget.style.background = "rgba(239, 68, 68, 0.25)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isVerifyingIsolation) {
+                e.currentTarget.style.background = "rgba(239, 68, 68, 0.15)";
+              }
             }}
           >
-            <Lock size={14} /> Re-verify Isolation
+            {isVerifyingIsolation ? (
+              <>
+                <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                Verifying Isolation...
+              </>
+            ) : (
+              <>
+                <Lock size={14} />
+                Re-verify Isolation
+              </>
+            )}
           </button>
 
+          {/* Export Incident Report Button */}
           <button
             type="button"
-            onClick={handleGenerateReport}
+            onClick={handleExportIncidentReport}
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
+              gap: "7px",
               padding: "10px 18px",
-              background: "#3ecfcf",
+              background: isExported ? "#10b981" : "#3ecfcf",
               border: "none",
               borderRadius: "8px",
               color: "#05080a",
               fontSize: "13px",
               fontWeight: 700,
               cursor: "pointer",
-              boxShadow: "0 2px 10px rgba(62, 207, 207, 0.25)",
+              fontFamily: "inherit",
+              boxShadow: isExported
+                ? "0 2px 10px rgba(16, 185, 129, 0.35)"
+                : "0 2px 10px rgba(62, 207, 207, 0.25)",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              if (!isExported) {
+                e.currentTarget.style.background = "#5eead4";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isExported) {
+                e.currentTarget.style.background = "#3ecfcf";
+              }
             }}
           >
-            <FileCheck2 size={15} /> Export Incident Report
+            {isExported ? (
+              <>
+                <Check size={15} />
+                Report Exported!
+              </>
+            ) : (
+              <>
+                <FileCheck2 size={15} />
+                Export Incident Report
+              </>
+            )}
           </button>
         </div>
       </div>

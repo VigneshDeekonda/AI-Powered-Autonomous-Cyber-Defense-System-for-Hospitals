@@ -114,6 +114,15 @@ function App() {
         }
       />
 
+      <Route
+        path="/dashboard/:roleId/:tab/:subId"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+
       {/* Admin */}
       <Route
         path="/admin"

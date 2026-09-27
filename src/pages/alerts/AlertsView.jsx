@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Search,
   Filter,
@@ -226,8 +226,14 @@ export const INITIAL_ALERTS = [
   },
 ];
 
-export default function AlertsView({ onInvestigateAlert }) {
-  const [alerts, setAlerts] = useState(INITIAL_ALERTS);
+export default function AlertsView({ onInvestigateAlert, alerts: propAlerts }) {
+  const [alerts, setAlerts] = useState(propAlerts || INITIAL_ALERTS);
+
+  useEffect(() => {
+    if (propAlerts) {
+      setAlerts(propAlerts);
+    }
+  }, [propAlerts]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSeverity, setSelectedSeverity] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");

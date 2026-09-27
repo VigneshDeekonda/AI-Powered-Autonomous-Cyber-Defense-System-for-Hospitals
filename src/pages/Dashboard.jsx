@@ -14,12 +14,37 @@ import {
 import "./Dashboard.css";
 import AlertsView, { INITIAL_ALERTS } from "./alerts/AlertsView";
 import IncidentInvestigationView from "./investigation/IncidentInvestigationView";
+import ForensicsView from "./forensics/ForensicsView";
 
 export default function Dashboard() {
   const { userProfile, currentUser, logout } = useAuth();
-  const { roleId, tab } = useParams();
+  const { roleId, tab, subId } = useParams();
   const navigate = useNavigate();
+  const [alerts, setAlerts] = useState(INITIAL_ALERTS);
   const [selectedAlert, setSelectedAlert] = useState(INITIAL_ALERTS[0]);
+
+  const handleUpdateAlertStatus = (alertId, newStatus, newResponseStatus) => {
+    setAlerts((prevAlerts) =>
+      prevAlerts.map((a) =>
+        a.id === alertId
+          ? {
+              ...a,
+              detectionStatus: newStatus,
+              responseStatus: newResponseStatus || a.responseStatus,
+            }
+          : a
+      )
+    );
+    setSelectedAlert((prev) =>
+      prev && prev.id === alertId
+        ? {
+            ...prev,
+            detectionStatus: newStatus,
+            responseStatus: newResponseStatus || prev.responseStatus,
+          }
+        : prev
+    );
+  };
 
   // Format internal database role keys to proper operational titles
   const formatRole = (role) => {
@@ -277,6 +302,8 @@ export default function Dashboard() {
                 ? "SECURITY OPERATIONS CENTER · REAL-TIME TRIAGE"
                 : activeNav === "Incident Investigation"
                 ? "SECURITY OPERATIONS CENTER · INCIDENT INVESTIGATION"
+                : activeNav === "Forensics"
+                ? "DIGITAL FORENSICS REPOSITORY · TAMPER-PROOF CHAIN OF CUSTODY"
                 : roleMeta.eyebrow}
             </span>
             <h1 className="dash-title">
@@ -284,6 +311,8 @@ export default function Dashboard() {
                 ? "Security Alerts"
                 : activeNav === "Incident Investigation"
                 ? "Incident Investigation"
+                : activeNav === "Forensics"
+                ? "Forensics"
                 : "Home Dashboard"}
             </h1>
             <p className="dash-subtitle">
@@ -291,6 +320,8 @@ export default function Dashboard() {
                 ? "Real-time threat detection, IoMT telemetry triage, and autonomous mitigation controls."
                 : activeNav === "Incident Investigation"
                 ? "Detailed AI-based threat analysis, explainability metrics, and mitigation controls."
+                : activeNav === "Forensics"
+                ? "Tamper-proof evidence collected from autonomous investigations."
                 : roleMeta.subtitle}
             </p>
           </div>
@@ -311,13 +342,21 @@ export default function Dashboard() {
         <main className="dash-body">
           {activeNav === "Alerts" ? (
             /* Alerts screen shown when URL is /dashboard/:roleId/alerts */
-            <AlertsView onInvestigateAlert={handleInvestigateAlert} />
+            <AlertsView
+              alerts={alerts}
+              onInvestigateAlert={handleInvestigateAlert}
+              onUpdateStatus={handleUpdateAlertStatus}
+            />
           ) : activeNav === "Incident Investigation" ? (
             /* Incident Investigation screen shown when URL is /dashboard/:roleId/investigation */
             <IncidentInvestigationView
               alert={selectedAlert}
               onBack={() => navigate(`/dashboard/${currentRoleId}/alerts`)}
+              onUpdateStatus={handleUpdateAlertStatus}
             />
+          ) : activeNav === "Forensics" ? (
+            /* Forensics screen shown when URL is /dashboard/:roleId/forensics */
+            <ForensicsView />
           ) : (
             /* Home Dashboard shown when URL is /dashboard/:roleId/home */
             <>
