@@ -70,11 +70,11 @@ export default function Auth({ initialMode = "login", onBack, onAuthSuccess }) {
         )}
 
         <div className="cyber-compliance-badge">
-          <span>🛡️ ZERO-TRUST</span>
+          <span>ZERO-TRUST</span>
           <span>•</span>
-          <span>⚡ AI DEFENCE V2.4</span>
+          <span>AI DEFENCE V2.4</span>
           <span>•</span>
-          <span>🔒 AES-256</span>
+          <span>AES-256</span>
         </div>
       </div>
     </div>

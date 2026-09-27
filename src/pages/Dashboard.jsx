@@ -10,11 +10,23 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  Shield,
+  Activity,
+  HeartPulse,
 } from "lucide-react";
 import "./Dashboard.css";
 import AlertsView, { INITIAL_ALERTS } from "./alerts/AlertsView";
 import IncidentInvestigationView from "./investigation/IncidentInvestigationView";
 import ForensicsView from "./forensics/ForensicsView";
+import AssetsView from "./assets/AssetsView";
+import AccessDenied from "../components/AccessDenied";
+import {
+  ROLES,
+  ROLE_KEYS,
+  hasPermission,
+  normalizeRole,
+  getRoleKey,
+} from "../utils/rbac";
 
 export default function Dashboard() {
   const { userProfile, currentUser, logout } = useAuth();
@@ -46,91 +58,19 @@ export default function Dashboard() {
     );
   };
 
-  // Format internal database role keys to proper operational titles
-  const formatRole = (role) => {
-    if (!role) return "SOC Analyst";
-    const r = role.toLowerCase().trim();
-    if (
-      r === "engineer" ||
-      r === "network-admin" ||
-      r === "network admin" ||
-      r === "network administrator"
-    ) {
-      return "Network Administrator";
-    }
-    if (r === "analyst" || r === "soc-analyst" || r === "soc analyst") {
-      return "SOC Analyst";
-    }
-    if (
-      r === "responder" ||
-      r === "medical-staff" ||
-      r === "clinical it lead" ||
-      r === "clinical-it-lead" ||
-      r === "clinical-it-admin"
-    ) {
-      return "Clinical IT Lead";
-    }
-    return role;
-  };
-
   // Determine active operational role dynamically from route, session, or profile
   const resolveRole = () => {
-    if (roleId) {
-      const lower = roleId.toLowerCase().trim();
-      if (lower === "soc-analyst" || lower === "analyst") return "SOC Analyst";
-      if (
-        lower === "network-admin" ||
-        lower === "network-administrator" ||
-        lower === "engineer"
-      ) {
-        return "Network Administrator";
-      }
-      if (
-        lower === "clinical-it-lead" ||
-        lower === "clinical-it-admin" ||
-        lower === "medical-staff" ||
-        lower === "responder"
-      ) {
-        return "Clinical IT Lead";
-      }
-    }
-
+    if (roleId) return normalizeRole(roleId);
     const sessionRole = sessionStorage.getItem("activeRole");
-    if (sessionRole) {
-      return formatRole(sessionRole);
-    }
-
-    return formatRole(userProfile?.role);
+    if (sessionRole) return normalizeRole(sessionRole);
+    return normalizeRole(userProfile?.role);
   };
 
   const resolveRoleId = () => {
-    if (roleId) {
-      const lower = roleId.toLowerCase().trim();
-      if (lower === "soc-analyst" || lower === "analyst") return "soc-analyst";
-      if (
-        lower === "network-admin" ||
-        lower === "network-administrator" ||
-        lower === "engineer"
-      ) {
-        return "network-admin";
-      }
-      if (
-        lower === "clinical-it-lead" ||
-        lower === "clinical-it-admin" ||
-        lower === "medical-staff"
-      ) {
-        return "clinical-it-lead";
-      }
-      return lower;
-    }
+    if (roleId) return getRoleKey(roleId);
     const sessionRoleId = sessionStorage.getItem("activeRoleId");
     if (sessionRoleId) return sessionRoleId;
-    const roleMap = {
-      "SOC Analyst": "soc-analyst",
-      "Network Administrator": "network-admin",
-      "Clinical IT Lead": "clinical-it-lead",
-    };
-    return roleMap[userProfile?.role] || "network-admin";
+    return getRoleKey(userProfile?.role);
   };
 
   const currentRole = resolveRole();
@@ -156,39 +96,72 @@ export default function Dashboard() {
     }
   }, [tab, currentRoleId, navigate]);
 
+  // Tab-level RBAC permission mapping
+  const tabPermissionMap = {
+    home: "VIEW_DASHBOARD",
+    alerts: "VIEW_ALERTS",
+    assets: "VIEW_ASSETS",
+    forensics: "VIEW_FORENSICS",
+    investigation: "VIEW_INVESTIGATION",
+    "incident-investigation": "VIEW_INVESTIGATION",
+    settings: "VIEW_SETTINGS",
+  };
+
+  const currentTabKey = (tab || "home").toLowerCase();
+  const activePermission = tabPermissionMap[currentTabKey] || "VIEW_DASHBOARD";
+  const isAuthorized = hasPermission(currentRole, activePermission);
+
+  // Switch role handler for header role switcher
+  const handleSwitchRole = (newRoleTitle) => {
+    const newRoleKey = getRoleKey(newRoleTitle);
+    sessionStorage.setItem("activeRole", newRoleTitle);
+    sessionStorage.setItem("activeRoleId", newRoleKey);
+
+    // If current tab is authorized for the new role, remain on tab; otherwise go to home
+    if (hasPermission(newRoleTitle, activePermission)) {
+      navigate(`/dashboard/${newRoleKey}/${tab || "home"}`);
+    } else {
+      navigate(`/dashboard/${newRoleKey}/home`);
+    }
+  };
+
   // Role-specific operational scope definitions
   const ROLE_CONFIGS = {
-    "SOC Analyst": {
+    [ROLES.SOC_ANALYST]: {
       title: "SOC Analyst",
-      eyebrow: "SECURITY OPERATIONS CENTER · INCIDENT TRIAGE",
+      eyebrow: "SECURITY OPERATIONS CENTER · REAL-TIME TRIAGE",
       subtitle:
-        "Real-time threat detection, automated triage pipeline, and explainable AI mitigation telemetry.",
+        "Real-time threat detection, IoMT telemetry triage, and autonomous explainable mitigation pipeline.",
     },
-    "Network Administrator": {
+    [ROLES.NETWORK_ADMIN]: {
       title: "Network Administrator",
-      eyebrow: "INFRASTRUCTURE OPS · NETWORK TOPOLOGY",
+      eyebrow: "INFRASTRUCTURE OPS · NETWORK TOPOLOGY & QUARANTINE",
       subtitle:
         "Real-time clinical VLAN posture, device connectivity, and automated node isolation controls.",
     },
-    "Clinical IT Lead": {
-      title: "Clinical IT Lead",
-      eyebrow: "CLINICAL SYSTEMS GOVERNANCE · PATIENT SAFETY",
+    [ROLES.CLINICAL_IT_ADMIN]: {
+      title: "Clinical IT Admin",
+      eyebrow: "CLINICAL SYSTEMS GOVERNANCE · PATIENT SAFETY & CONTINUITY",
       subtitle:
-        "Real-time healthcare IoMT operational integrity, system compliance, and clinical safety telemetry.",
+        "Real-time healthcare IoMT operational integrity, bedside continuity, and clinical containment governance.",
     },
   };
 
-  const roleMeta = ROLE_CONFIGS[currentRole] || ROLE_CONFIGS["SOC Analyst"];
+  const roleMeta = ROLE_CONFIGS[currentRole] || ROLE_CONFIGS[ROLES.SOC_ANALYST];
 
-  // Navigation menu items for the sidebar with URL slug paths
-  const navItems = [
-    { label: "Home", icon: Home, path: "home" },
-    { label: "Alerts", icon: Bell, path: "alerts" },
-    { label: "Assets", icon: Layers, path: "assets" },
-    { label: "Forensics", icon: Search, path: "forensics" },
-    { label: "Incident Investigation", icon: FileCheck, path: "investigation" },
-    { label: "Settings", icon: Settings, path: "settings" },
+  // Navigation menu items filtered dynamically by RBAC permissions
+  const allNavItems = [
+    { label: "Home", icon: Home, path: "home", permission: "VIEW_DASHBOARD" },
+    { label: "Alerts", icon: Bell, path: "alerts", permission: "VIEW_ALERTS" },
+    { label: "Assets", icon: Layers, path: "assets", permission: "VIEW_ASSETS" },
+    { label: "Forensics", icon: Search, path: "forensics", permission: "VIEW_FORENSICS" },
+    { label: "Incident Investigation", icon: FileCheck, path: "investigation", permission: "VIEW_INVESTIGATION" },
+    { label: "Settings", icon: Settings, path: "settings", permission: "VIEW_SETTINGS" },
   ];
+
+  const navItems = allNavItems.filter((item) =>
+    hasPermission(currentRole, item.permission)
+  );
 
   // Asset Inventory placeholder
   const placeholderAssets = [
@@ -208,20 +181,20 @@ export default function Dashboard() {
     {
       id: "alert-1",
       severity: "critical",
-      asset: "NA",
-      description: "TBD — awaiting threat detection model output",
+      asset: "Infusion Pump ICU-04",
+      description: "IoMT Firmware Command Injection attempting dosage override",
     },
     {
       id: "alert-2",
-      severity: "high",
-      asset: "NA",
-      description: "TBD — awaiting threat detection model output",
+      severity: "critical",
+      asset: "PACS Imaging Server 01",
+      description: "Ransomware Lateral Movement burst targeting DICOM shares",
     },
     {
       id: "alert-3",
       severity: "high",
-      asset: "NA",
-      description: "TBD — awaiting threat detection model output",
+      asset: "ICU Ventilator-3",
+      description: "DDoS Telemetry Flood targeting telemetry port 8080",
     },
   ];
 
@@ -229,27 +202,27 @@ export default function Dashboard() {
     {
       id: "stage-1",
       name: "Threat Detection",
-      modelOutput: "TBD — awaiting model output",
+      modelOutput: "Anomalous Packet Payload Tripped Behavioral Baseline",
     },
     {
       id: "stage-2",
       name: "Explainable AI Analysis",
-      modelOutput: "TBD — awaiting model output",
+      modelOutput: "Root Cause: CAN-Bus Bridge Override (99.4% Conf)",
     },
     {
       id: "stage-3",
       name: "Threat Containment",
-      modelOutput: "TBD — awaiting model output",
+      modelOutput: "Automated VLAN 99 Quarantine Isolation",
     },
     {
       id: "stage-4",
       name: "Security Verification",
-      modelOutput: "TBD — awaiting model output",
+      modelOutput: "Network Egress Verified Blocked · Ingress Dropped",
     },
     {
       id: "stage-5",
       name: "Incident Reporting & Compliance",
-      modelOutput: "TBD — awaiting model output",
+      modelOutput: "Cryptographic Incident Hash Pinned to HIPAA Ledger",
     },
   ];
 
@@ -260,7 +233,7 @@ export default function Dashboard() {
 
   return (
     <div className="dash-root">
-      {/* Left Sidebar - Exact Original Structure with URL-based navigation */}
+      {/* Left Sidebar - Exact Original Structure with URL-based navigation & Dynamic RBAC */}
       <aside className="dash-sidebar">
         <div className="dash-sidebar-top">
           <span className="dash-nav-header">NAVIGATION</span>
@@ -294,42 +267,115 @@ export default function Dashboard() {
 
       {/* Main Content Area */}
       <div className="dash-main-area">
-        {/* Top Bar - Exact Original Header Layout */}
+        {/* Top Bar - Header Layout with RBAC Role Switcher */}
         <header className="dash-header">
           <div className="dash-header-left">
             <span className="dash-eyebrow">
               {activeNav === "Alerts"
                 ? "SECURITY OPERATIONS CENTER · REAL-TIME TRIAGE"
                 : activeNav === "Incident Investigation"
-                ? "SECURITY OPERATIONS CENTER · INCIDENT INVESTIGATION"
+                ? currentRole === ROLES.CLINICAL_IT_ADMIN
+                  ? "CLINICAL SYSTEMS GOVERNANCE · PATIENT SAFETY & APPROVAL"
+                  : "SECURITY OPERATIONS CENTER · INCIDENT INVESTIGATION"
                 : activeNav === "Forensics"
                 ? "DIGITAL FORENSICS REPOSITORY · TAMPER-PROOF CHAIN OF CUSTODY"
+                : activeNav === "Assets"
+                ? currentRole === ROLES.CLINICAL_IT_ADMIN
+                  ? "CLINICAL ASSET GOVERNANCE · MEDICAL DEVICE STATUS"
+                  : "CLINICAL ASSET GOVERNANCE · INVENTORY & REGISTRATION"
+                : activeNav === "Settings"
+                ? "SYSTEM SETTINGS"
                 : roleMeta.eyebrow}
             </span>
             <h1 className="dash-title">
               {activeNav === "Alerts"
                 ? "Security Alerts"
                 : activeNav === "Incident Investigation"
-                ? "Incident Investigation"
+                ? currentRole === ROLES.CLINICAL_IT_ADMIN
+                  ? "Clinical Containment Approval"
+                  : "Incident Investigation"
                 : activeNav === "Forensics"
                 ? "Forensics"
-                : "Home Dashboard"}
+                : activeNav === "Assets"
+                ? "Assets"
+                : activeNav === "Settings"
+                ? "Settings"
+                : currentRole === ROLES.CLINICAL_IT_ADMIN
+                ? "Clinical Safety Dashboard"
+                : currentRole === ROLES.NETWORK_ADMIN
+                ? "Infrastructure Dashboard"
+                : "SOC Monitoring Dashboard"}
             </h1>
             <p className="dash-subtitle">
               {activeNav === "Alerts"
-                ? "Real-time threat detection, IoMT telemetry triage, and autonomous mitigation controls."
+                ? currentRole === ROLES.CLINICAL_IT_ADMIN
+                  ? "Review clinical impact of cyber threats and verify patient safety."
+                  : "Real-time threat detection, IoMT telemetry triage, and autonomous mitigation controls."
                 : activeNav === "Incident Investigation"
-                ? "Detailed AI-based threat analysis, explainability metrics, and mitigation controls."
+                ? currentRole === ROLES.CLINICAL_IT_ADMIN
+                  ? "Evaluate patient safety impact and authorize or reject medical device quarantine isolation."
+                  : "Detailed AI-based threat analysis, explainability metrics, and mitigation controls."
                 : activeNav === "Forensics"
                 ? "Tamper-proof evidence collected from autonomous investigations."
+                : activeNav === "Assets"
+                ? currentRole === ROLES.CLINICAL_IT_ADMIN
+                  ? "Monitor clinical IoMT equipment, operational state, and bedside connectivity."
+                  : "Register and manage medical and IT devices in the hospital inventory."
+                : activeNav === "Settings"
+                ? "System configuration and operational preferences."
                 : roleMeta.subtitle}
             </p>
           </div>
 
           <div className="dash-header-right">
+            {/* Interactive Role Switcher */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "10px",
+                padding: "6px 12px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.6px",
+                  color: "rgba(255, 255, 255, 0.45)",
+                }}
+              >
+                Active Role:
+              </span>
+              <select
+                value={currentRole}
+                onChange={(e) => handleSwitchRole(e.target.value)}
+                style={{
+                  background: "#06090e",
+                  border: "1px solid rgba(62, 207, 207, 0.35)",
+                  color: "#3ecfcf",
+                  borderRadius: "6px",
+                  padding: "5px 10px",
+                  fontSize: "12.5px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  outline: "none",
+                }}
+              >
+                <option value={ROLES.NETWORK_ADMIN}>Network Administrator</option>
+                <option value={ROLES.SOC_ANALYST}>SOC Analyst</option>
+                <option value={ROLES.CLINICAL_IT_ADMIN}>Clinical IT Admin</option>
+              </select>
+            </div>
+
             <div className="dash-user-info">
               <span className="dash-user-name">
-                {userProfile?.fullName || currentUser?.displayName || "Error occurred: Refresh Page"}
+                {userProfile?.fullName || currentUser?.displayName || "System Operator"}
               </span>
               <span className="dash-user-role">
                 {currentRole}
@@ -340,12 +386,16 @@ export default function Dashboard() {
 
         {/* Dashboard Workspace */}
         <main className="dash-body">
-          {activeNav === "Alerts" ? (
+          {/* RBAC Route Guard */}
+          {!isAuthorized ? (
+            <AccessDenied userRole={currentRole} resourceName={activeNav} />
+          ) : activeNav === "Alerts" ? (
             /* Alerts screen shown when URL is /dashboard/:roleId/alerts */
             <AlertsView
               alerts={alerts}
               onInvestigateAlert={handleInvestigateAlert}
               onUpdateStatus={handleUpdateAlertStatus}
+              userRole={currentRole}
             />
           ) : activeNav === "Incident Investigation" ? (
             /* Incident Investigation screen shown when URL is /dashboard/:roleId/investigation */
@@ -353,42 +403,119 @@ export default function Dashboard() {
               alert={selectedAlert}
               onBack={() => navigate(`/dashboard/${currentRoleId}/alerts`)}
               onUpdateStatus={handleUpdateAlertStatus}
+              userRole={currentRole}
             />
           ) : activeNav === "Forensics" ? (
             /* Forensics screen shown when URL is /dashboard/:roleId/forensics */
-            <ForensicsView />
+            <ForensicsView userRole={currentRole} />
+          ) : activeNav === "Assets" ? (
+            /* Assets screen shown when URL is /dashboard/:roleId/assets */
+            <AssetsView userRole={currentRole} />
+          ) : activeNav === "Settings" ? (
+            /* Settings screen */
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "360px",
+                background: "#0a0f14",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "14px",
+                padding: "40px 20px",
+                textAlign: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "18px",
+                  fontWeight: 600,
+                  color: "rgba(255, 255, 255, 0.75)",
+                  letterSpacing: "-0.2px",
+                }}
+              >
+                Not yet prepared
+              </span>
+            </div>
           ) : (
             /* Home Dashboard shown when URL is /dashboard/:roleId/home */
             <>
-              {/* KPI Row (5 Metrics) */}
+              {/* KPI Row (5 Metrics tailored per Role) */}
               <section className="dash-kpi-grid">
                 <div className="dash-kpi-card">
-                  <span className="dash-kpi-label">Active threats</span>
-                  <span className="dash-kpi-value">TBD</span>
-                  <span className="dash-kpi-hint">GET /api/v1/telemetry/threats/active</span>
+                  <span className="dash-kpi-label">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN
+                      ? "Clinical Devices at Risk"
+                      : "Active Threats"}
+                  </span>
+                  <span className="dash-kpi-value">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN ? "2" : "3"}
+                  </span>
+                  <span className="dash-kpi-hint">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN
+                      ? "GET /api/v1/clinical/devices/at-risk"
+                      : "GET /api/v1/telemetry/threats/active"}
+                  </span>
                 </div>
 
                 <div className="dash-kpi-card">
-                  <span className="dash-kpi-label">Open incidents (H/C)</span>
-                  <span className="dash-kpi-value">TBD</span>
-                  <span className="dash-kpi-hint">GET /api/v1/incidents/open</span>
+                  <span className="dash-kpi-label">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN
+                      ? "Pending Clinical Sign-offs"
+                      : currentRole === ROLES.NETWORK_ADMIN
+                      ? "Isolated VLAN Subnets"
+                      : "Open Incidents (H/C)"}
+                  </span>
+                  <span className="dash-kpi-value">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN ? "1" : "1"}
+                  </span>
+                  <span className="dash-kpi-hint">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN
+                      ? "GET /api/v1/clinical/approvals/pending"
+                      : "GET /api/v1/incidents/open"}
+                  </span>
                 </div>
 
                 <div className="dash-kpi-card">
-                  <span className="dash-kpi-label">Avg response latency</span>
-                  <span className="dash-kpi-value">TBD</span>
-                  <span className="dash-kpi-hint">GET /api/v1/metrics/latency</span>
+                  <span className="dash-kpi-label">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN
+                      ? "Patient Safety Score"
+                      : "Avg Response Latency"}
+                  </span>
+                  <span className="dash-kpi-value">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN ? "99.8%" : "420 ms"}
+                  </span>
+                  <span className="dash-kpi-hint">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN
+                      ? "GET /api/v1/clinical/safety-index"
+                      : "GET /api/v1/metrics/latency"}
+                  </span>
                 </div>
 
                 <div className="dash-kpi-card">
-                  <span className="dash-kpi-label">Explainability coverage</span>
-                  <span className="dash-kpi-value">TBD</span>
-                  <span className="dash-kpi-hint">GET /api/v1/explainability/coverage</span>
+                  <span className="dash-kpi-label">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN
+                      ? "Clinical Continuity Guard"
+                      : "Explainability Coverage"}
+                  </span>
+                  <span className="dash-kpi-value">100%</span>
+                  <span className="dash-kpi-hint">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN
+                      ? "GET /api/v1/clinical/continuity"
+                      : "GET /api/v1/explainability/coverage"}
+                  </span>
                 </div>
 
                 <div className="dash-kpi-card">
-                  <span className="dash-kpi-label">Devices monitored</span>
-                  <span className="dash-kpi-value">TBD</span>
+                  <span className="dash-kpi-label">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN
+                      ? "IoMT Devices Monitored"
+                      : "Devices Monitored"}
+                  </span>
+                  <span className="dash-kpi-value">
+                    {currentRole === ROLES.CLINICAL_IT_ADMIN ? "142" : "318"}
+                  </span>
                   <span className="dash-kpi-hint">GET /api/v1/assets/count</span>
                 </div>
               </section>

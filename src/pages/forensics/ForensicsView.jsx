@@ -21,6 +21,8 @@ import {
   FileCode,
   Lock,
 } from "lucide-react";
+import { hasPermission, normalizeRole } from "../../utils/rbac";
+import AccessDenied from "../../components/AccessDenied";
 
 // Comprehensive Forensic Evidence Records matching hospital cybersecurity architecture
 export const FORENSIC_EVIDENCE_DATA = [
@@ -356,9 +358,20 @@ export const FORENSIC_EVIDENCE_DATA = [
   },
 ];
 
-export default function ForensicsView() {
+export default function ForensicsView({ userRole }) {
   const navigate = useNavigate();
   const { roleId, subId } = useParams();
+  const normRole = normalizeRole(userRole || roleId);
+
+  // Enforce Forensics permission (Hidden and blocked from Clinical IT Admin)
+  if (!hasPermission(normRole, "VIEW_FORENSICS")) {
+    return (
+      <AccessDenied
+        userRole={normRole}
+        resourceName="Digital Forensics Repository & Evidence Chain"
+      />
+    );
+  }
 
   // Current active role id for navigation
   const activeRoleId = roleId || "network-admin";

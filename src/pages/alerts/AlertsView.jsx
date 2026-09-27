@@ -15,7 +15,9 @@ import {
   ChevronDown,
   X,
   SlidersHorizontal,
+  HeartPulse,
 } from "lucide-react";
+import { ROLES, normalizeRole } from "../../utils/rbac";
 
 // Default comprehensive alerts dataset for Hospital AI-ACDS
 export const INITIAL_ALERTS = [
@@ -27,6 +29,7 @@ export const INITIAL_ALERTS = [
     assetIp: "10.24.118.42",
     assetType: "Medical IoMT Device",
     department: "Intensive Care Unit (ICU)",
+    bedsideLocation: "ICU Bed 04 · Building B · Floor 3",
     threatType: "IoMT Firmware Command Injection",
     severity: "Critical",
     riskScore: 96,
@@ -35,6 +38,10 @@ export const INITIAL_ALERTS = [
     mitreTechnique: "T1059.004 / T1489",
     cve: "CVE-2026-38291",
     confidence: "99.4%",
+    isMedicalDevice: true,
+    clinicalApprovalStatus: "Pending", // "Pending" | "Approved" | "Rejected"
+    patientSafetyImpact: "High - Continuous bedside IV infusion delivering titratable inotrope. Uncoordinated shutoff risks acute hemodynamic collapse.",
+    clinicalMitigation: "Stepper motor driver locked into fail-safe mechanical baseline; zero bolus override permitted.",
     description:
       "AI behavioral model detected unauthorized remote shell payload attempting to override IV delivery rate beyond physiological safety limits.",
     xaiExplanation:
@@ -105,6 +112,7 @@ export const INITIAL_ALERTS = [
     assetIp: "10.24.118.67",
     assetType: "Life-Critical Device",
     department: "Intensive Care Unit (ICU)",
+    bedsideLocation: "ICU Bed 03 · Building B · Floor 3",
     threatType: "DDoS Telemetry Flood Attack",
     severity: "High",
     riskScore: 82,
@@ -113,6 +121,10 @@ export const INITIAL_ALERTS = [
     mitreTechnique: "T1498.001",
     cve: "CVE-2025-4921",
     confidence: "95.1%",
+    isMedicalDevice: true,
+    clinicalApprovalStatus: "Approved",
+    patientSafetyImpact: "Life Critical - Invasive respiratory ventilation. Network rate limiting verified safe without impacting patient airway volume.",
+    clinicalMitigation: "Local autonomous breathing cycle preserved; network telemetry isolated to VLAN 99.",
     description:
       "SYN flood targeting ventilator central telemetry port 8080 attempting to cause signal dropout at nursing station.",
     xaiExplanation:
@@ -157,6 +169,7 @@ export const INITIAL_ALERTS = [
     assetIp: "10.24.110.5",
     assetType: "Automated Medication Dispenser",
     department: "Central Pharmacy",
+    bedsideLocation: "Central Pharmacy · Cleanroom Dispense Station 1",
     threatType: "HL7 Protocol Injection Anomaly",
     severity: "Medium",
     riskScore: 58,
@@ -165,6 +178,10 @@ export const INITIAL_ALERTS = [
     mitreTechnique: "T1190 / CWE-20",
     cve: "CVE-2026-22104",
     confidence: "89.4%",
+    isMedicalDevice: true,
+    clinicalApprovalStatus: "Approved",
+    patientSafetyImpact: "Moderate - Automated dispensing cabinet for critical schedule II medications.",
+    clinicalMitigation: "Cabinet switched to physical biometric dual-key manual access mode; dispensing logs secured.",
     description:
       "Malformed MSH-9 HL7 segment with excessive buffer allocation attempt sent to Pyxis automated medication cabinet.",
     xaiExplanation:
@@ -226,7 +243,10 @@ export const INITIAL_ALERTS = [
   },
 ];
 
-export default function AlertsView({ onInvestigateAlert, alerts: propAlerts }) {
+export default function AlertsView({ onInvestigateAlert, alerts: propAlerts, userRole }) {
+  const normRole = normalizeRole(userRole);
+  const isClinicalAdmin = normRole === ROLES.CLINICAL_IT_ADMIN;
+
   const [alerts, setAlerts] = useState(propAlerts || INITIAL_ALERTS);
 
   useEffect(() => {
@@ -950,6 +970,47 @@ export default function AlertsView({ onInvestigateAlert, alerts: propAlerts }) {
                         >
                           {alert.department}
                         </div>
+
+                        {alert.isMedicalDevice && (
+                          <div style={{ marginTop: "5px" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "2px 7px",
+                                borderRadius: "4px",
+                                fontSize: "10.5px",
+                                fontWeight: 700,
+                                background:
+                                  alert.clinicalApprovalStatus === "Approved"
+                                    ? "rgba(16, 185, 129, 0.12)"
+                                    : alert.clinicalApprovalStatus === "Rejected"
+                                    ? "rgba(239, 68, 68, 0.12)"
+                                    : "rgba(245, 158, 11, 0.12)",
+                                color:
+                                  alert.clinicalApprovalStatus === "Approved"
+                                    ? "#34d399"
+                                    : alert.clinicalApprovalStatus === "Rejected"
+                                    ? "#f87171"
+                                    : "#fbbf24",
+                                border:
+                                  alert.clinicalApprovalStatus === "Approved"
+                                    ? "1px solid rgba(16, 185, 129, 0.3)"
+                                    : alert.clinicalApprovalStatus === "Rejected"
+                                    ? "1px solid rgba(239, 68, 68, 0.3)"
+                                    : "1px solid rgba(245, 158, 11, 0.3)",
+                              }}
+                            >
+                              <HeartPulse size={10} />
+                              {alert.clinicalApprovalStatus === "Approved"
+                                ? "Medical Sign-off: Approved"
+                                : alert.clinicalApprovalStatus === "Rejected"
+                                ? "Medical Sign-off: Rejected"
+                                : "Medical Sign-off: Pending"}
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Threat Type */}
@@ -1116,7 +1177,15 @@ export default function AlertsView({ onInvestigateAlert, alerts: propAlerts }) {
                               "0 2px 10px rgba(62, 207, 207, 0.25)";
                           }}
                         >
-                          Investigate <ArrowRight size={13} />
+                          {isClinicalAdmin ? (
+                            <>
+                              Review Impact <ArrowRight size={13} />
+                            </>
+                          ) : (
+                            <>
+                              Investigate <ArrowRight size={13} />
+                            </>
+                          )}
                         </button>
                       </td>
                     </tr>

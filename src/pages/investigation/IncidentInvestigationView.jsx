@@ -21,12 +21,16 @@ import {
   ShieldCheck,
   X,
   FileText,
+  HeartPulse,
+  Stethoscope,
 } from "lucide-react";
+import { ROLES, normalizeRole, hasPermission } from "../../utils/rbac";
 
 export default function IncidentInvestigationView({
   alert,
   onBack,
   onUpdateStatus,
+  userRole,
 }) {
   const [currentAlert, setCurrentAlert] = useState(alert);
   const [toastMessage, setToastMessage] = useState("");
@@ -34,9 +38,35 @@ export default function IncidentInvestigationView({
   const [isolationVerified, setIsolationVerified] = useState(false);
   const [isExported, setIsExported] = useState(false);
 
+  // Normalize role
+  const normRole = normalizeRole(userRole);
+  const isClinicalAdmin = normRole === ROLES.CLINICAL_IT_ADMIN;
+  const isSocAnalyst = normRole === ROLES.SOC_ANALYST;
+  const isNetworkAdmin = normRole === ROLES.NETWORK_ADMIN;
+
+  // Determine if target asset is a medical device
+  const isMedicalDevice = Boolean(
+    currentAlert?.isMedicalDevice ?? (
+      currentAlert?.asset?.toLowerCase().includes("pump") ||
+      currentAlert?.asset?.toLowerCase().includes("ventilator") ||
+      currentAlert?.asset?.toLowerCase().includes("mri") ||
+      currentAlert?.asset?.toLowerCase().includes("dispenser") ||
+      currentAlert?.asset?.toLowerCase().includes("cardiac") ||
+      currentAlert?.assetType?.toLowerCase().includes("medical") ||
+      currentAlert?.assetType?.toLowerCase().includes("life-critical")
+    )
+  );
+
+  const [clinicalApprovalStatus, setClinicalApprovalStatus] = useState(
+    currentAlert?.clinicalApprovalStatus || (isMedicalDevice ? "Pending" : "Not Required")
+  );
+
   useEffect(() => {
     if (alert) {
       setCurrentAlert(alert);
+      setClinicalApprovalStatus(
+        alert.clinicalApprovalStatus || (isMedicalDevice ? "Pending" : "Not Required")
+      );
     }
   }, [alert]);
 
@@ -112,7 +142,44 @@ export default function IncidentInvestigationView({
     }
   };
 
-  // Handle Detection Status transitions
+  // Clinical Containment Approval Handlers
+  const handleApproveContainment = () => {
+    setClinicalApprovalStatus("Approved");
+    const newResponseStatus = "VLAN 99 Quarantine Approved by Clinical IT (Active)";
+    const updated = {
+      ...currentAlert,
+      clinicalApprovalStatus: "Approved",
+      detectionStatus: "Contained",
+      responseStatus: newResponseStatus,
+    };
+    setCurrentAlert(updated);
+    if (onUpdateStatus) {
+      onUpdateStatus(currentAlert.id, "Contained", newResponseStatus);
+    }
+    triggerToast(
+      `Clinical Approval Granted: Autonomous quarantine authorized for ${currentAlert.asset}. Patient safety verified.`
+    );
+  };
+
+  const handleRejectContainment = () => {
+    setClinicalApprovalStatus("Rejected");
+    const newResponseStatus = "Containment Rejected by Clinical IT · Bedside Override Active";
+    const updated = {
+      ...currentAlert,
+      clinicalApprovalStatus: "Rejected",
+      detectionStatus: "Investigating",
+      responseStatus: newResponseStatus,
+    };
+    setCurrentAlert(updated);
+    if (onUpdateStatus) {
+      onUpdateStatus(currentAlert.id, "Investigating", newResponseStatus);
+    }
+    triggerToast(
+      `Containment Rejected: ${currentAlert.asset} kept online under manual biomedical engineering override.`
+    );
+  };
+
+  // Handle Detection Status transitions (SOC mode)
   const handleStatusChange = (newStatus) => {
     let newResponseStatus = currentAlert.responseStatus;
     if (newStatus === "Resolved") {
@@ -187,6 +254,7 @@ IP Address        : ${currentAlert.assetIp}
 Quarantine VLAN   : VLAN 99 (Isolated)
 Device Category   : ${currentAlert.assetType}
 Department        : ${currentAlert.department}
+Clinical Approval : ${clinicalApprovalStatus}
 --------------------------------------------------------------------------------
 THREAT CLASSIFICATION & ADVERSARY TACTICS
 Threat Type       : ${currentAlert.threatType}
@@ -235,6 +303,538 @@ CONFIDENTIAL - CLINICAL CYBERSECURITY AUDIT RECORD - HIPAA / NIST SP 800-61 Rev.
     }, 2500);
   };
 
+  // =========================================================================
+  // VIEW MODE A: CLINICAL IT ADMIN DEDICATED APPROVAL VIEW
+  // =========================================================================
+  if (isClinicalAdmin) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "24px", textAlign: "left" }}>
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: "28px",
+              right: "28px",
+              background: "#0e1620",
+              border: "1px solid #3ecfcf",
+              color: "#3ecfcf",
+              padding: "12px 20px",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: "600",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
+              zIndex: 9999,
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <CheckCircle2 size={16} color="#3ecfcf" />
+            {toastMessage}
+          </div>
+        )}
+
+        {/* Top Navigation Row */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "16px",
+          }}
+        >
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "transparent",
+              border: "none",
+              color: "#3ecfcf",
+              fontSize: "13.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+              padding: 0,
+              transition: "opacity 0.15s ease",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.8")}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+          >
+            <ArrowLeft size={16} /> Back to Security Alerts Queue
+          </button>
+
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "6px 14px",
+              background: "rgba(62, 207, 207, 0.08)",
+              border: "1px solid rgba(62, 207, 207, 0.25)",
+              borderRadius: "8px",
+              fontSize: "12px",
+              color: "#3ecfcf",
+              fontWeight: 700,
+            }}
+          >
+            <HeartPulse size={15} /> Clinical IT Admin · Medical Device Containment Approval
+          </div>
+        </div>
+
+        {/* Card 1: Incident Summary */}
+        <div
+          style={{
+            background: "#0a0f14",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            borderRadius: "14px",
+            padding: "24px 28px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontFamily: "monospace",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  color: "#3ecfcf",
+                  background: "rgba(62, 207, 207, 0.1)",
+                  border: "1px solid rgba(62, 207, 207, 0.25)",
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                }}
+              >
+                {currentAlert.id}
+              </span>
+
+              <span
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "11.5px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  background:
+                    currentAlert.severity === "Critical"
+                      ? "rgba(239, 68, 68, 0.14)"
+                      : "rgba(249, 115, 22, 0.14)",
+                  color: currentAlert.severity === "Critical" ? "#f87171" : "#fb923c",
+                  border:
+                    currentAlert.severity === "Critical"
+                      ? "1px solid rgba(239, 68, 68, 0.35)"
+                      : "1px solid rgba(249, 115, 22, 0.35)",
+                }}
+              >
+                {currentAlert.severity}
+              </span>
+
+              <span
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  ...getStatusBadgeStyle(currentAlert.detectionStatus),
+                }}
+              >
+                {currentAlert.detectionStatus}
+              </span>
+
+              <span
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "11.5px",
+                  fontWeight: 700,
+                  background: "rgba(255, 255, 255, 0.05)",
+                  color: currentAlert.riskScore >= 90 ? "#f87171" : "#fb923c",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                }}
+              >
+                Cyber Risk: {currentAlert.riskScore}/100
+              </span>
+            </div>
+
+            <div
+              style={{
+                fontSize: "12px",
+                color: "rgba(255, 255, 255, 0.45)",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <Clock size={13} /> {currentAlert.timestamp}
+            </div>
+          </div>
+
+          <div>
+            <h1
+              style={{
+                fontSize: "20px",
+                fontWeight: 700,
+                color: "#ffffff",
+                margin: "0 0 8px 0",
+                letterSpacing: "-0.3px",
+              }}
+            >
+              {currentAlert.threatType}
+            </h1>
+            <p
+              style={{
+                fontSize: "13.5px",
+                color: "rgba(255, 255, 255, 0.7)",
+                lineHeight: "1.55",
+                margin: 0,
+              }}
+            >
+              {currentAlert.description}
+            </p>
+          </div>
+        </div>
+
+        {/* 2-Column Grid: Clinical Device Scope + Patient Safety Assessment */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+            gap: "20px",
+          }}
+        >
+          {/* Card 2: Affected Medical Device */}
+          <div
+            style={{
+              background: "#0a0f14",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "14px",
+              padding: "22px 24px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                color: "#3ecfcf",
+                marginBottom: "14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <Stethoscope size={14} /> Affected Clinical Medical Device
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingBottom: "8px",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                }}
+              >
+                <span style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "13px" }}>
+                  Device Name
+                </span>
+                <strong style={{ color: "#ffffff", fontSize: "13px" }}>
+                  {currentAlert.asset}
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingBottom: "8px",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                }}
+              >
+                <span style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "13px" }}>
+                  Device Classification
+                </span>
+                <span style={{ color: "#3ecfcf", fontSize: "13px", fontWeight: 600 }}>
+                  {currentAlert.assetType || "Medical IoMT Device"}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingBottom: "8px",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                }}
+              >
+                <span style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "13px" }}>
+                  Hospital Department
+                </span>
+                <span style={{ color: "#ffffff", fontSize: "13px" }}>
+                  {currentAlert.department}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingBottom: "8px",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                }}
+              >
+                <span style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "13px" }}>
+                  Bedside Physical Location
+                </span>
+                <span style={{ color: "#ffffff", fontSize: "13px" }}>
+                  {currentAlert.bedsideLocation || "ICU Ward · Bed 04"}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "13px" }}>
+                  Network IP / Subnet
+                </span>
+                <span
+                  style={{
+                    color: "#3ecfcf",
+                    fontFamily: "monospace",
+                    fontSize: "13px",
+                  }}
+                >
+                  {currentAlert.assetIp}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Patient Safety Impact Assessment */}
+          <div
+            style={{
+              background: "#0a0f14",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "14px",
+              padding: "22px 24px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "14px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                    color: "#f87171",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <AlertTriangle size={14} /> Patient Safety &amp; Continuity Assessment
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    color: "#fb923c",
+                    background: "rgba(249, 115, 22, 0.12)",
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                  }}
+                >
+                  Life-Critical IoMT
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.02)",
+                  border: "1px solid rgba(255, 255, 255, 0.06)",
+                  borderRadius: "8px",
+                  padding: "14px 16px",
+                  marginBottom: "14px",
+                }}
+              >
+                <div style={{ fontSize: "12px", color: "#f87171", fontWeight: 700, marginBottom: "4px" }}>
+                  Clinical Risk Scenario:
+                </div>
+                <p style={{ fontSize: "13px", color: "rgba(255, 255, 255, 0.8)", margin: "0 0 10px 0", lineHeight: "1.5" }}>
+                  {currentAlert.patientSafetyImpact ||
+                    "Continuous patient support device. Uncoordinated shutoff or abrupt power-down risks severe patient harm."}
+                </p>
+                <div style={{ fontSize: "12px", color: "#3ecfcf", fontWeight: 700, marginBottom: "4px" }}>
+                  Autonomous Safety Guard:
+                </div>
+                <p style={{ fontSize: "13px", color: "rgba(255, 255, 255, 0.8)", margin: 0, lineHeight: "1.5" }}>
+                  {currentAlert.clinicalMitigation ||
+                    "Device firmware maintains safe baseline delivery rate locally. Network quarantine only severs external telemetry."}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.5)" }}>
+              AI Recommendation: Enforce VLAN 99 Quarantine Isolation while preserving physical bedside operation.
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Clinical Containment Decision & Mandatory Sign-Off Actions */}
+        <div
+          style={{
+            background: "#0a0f14",
+            border:
+              clinicalApprovalStatus === "Approved"
+                ? "1px solid rgba(16, 185, 129, 0.35)"
+                : clinicalApprovalStatus === "Rejected"
+                ? "1px solid rgba(239, 68, 68, 0.35)"
+                : "1px solid rgba(62, 207, 207, 0.35)",
+            borderRadius: "14px",
+            padding: "24px 28px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "20px",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.8px",
+                color: "#3ecfcf",
+                marginBottom: "6px",
+              }}
+            >
+              Clinical Authority Sign-Off Status
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+              <span
+                style={{
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  color:
+                    clinicalApprovalStatus === "Approved"
+                      ? "#34d399"
+                      : clinicalApprovalStatus === "Rejected"
+                      ? "#f87171"
+                      : "#fbbf24",
+                }}
+              >
+                {clinicalApprovalStatus === "Approved"
+                  ? "Containment Approved · Patient Safety Confirmed"
+                  : clinicalApprovalStatus === "Rejected"
+                  ? "Containment Rejected · Bedside Override Enforced"
+                  : "Awaiting Clinical IT Admin Sign-off"}
+              </span>
+            </div>
+            <p style={{ fontSize: "12.5px", color: "rgba(255, 255, 255, 0.6)", margin: 0, maxWidth: "620px" }}>
+              Your clinical sign-off confirms that patient safety protocols are verified and that isolating this
+              device's network interface to Quarantine VLAN 99 will not jeopardize active patient care.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            {/* Reject Button */}
+            <button
+              type="button"
+              onClick={handleRejectContainment}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "11px 20px",
+                background:
+                  clinicalApprovalStatus === "Rejected"
+                    ? "rgba(239, 68, 68, 0.3)"
+                    : "rgba(239, 68, 68, 0.12)",
+                border: "1px solid rgba(239, 68, 68, 0.4)",
+                borderRadius: "8px",
+                color: "#f87171",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239, 68, 68, 0.25)")}
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background =
+                  clinicalApprovalStatus === "Rejected"
+                    ? "rgba(239, 68, 68, 0.3)"
+                    : "rgba(239, 68, 68, 0.12)")
+              }
+            >
+              <X size={16} /> Reject Containment (Keep Online)
+            </button>
+
+            {/* Approve Button */}
+            <button
+              type="button"
+              onClick={handleApproveContainment}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "11px 22px",
+                background: "#10b981",
+                color: "#05080a",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                boxShadow: "0 2px 12px rgba(16, 185, 129, 0.35)",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#34d399")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#10b981")}
+            >
+              <ShieldCheck size={16} /> Approve Autonomous Containment
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VIEW MODE B: SOC ANALYST & NETWORK ADMIN TECHNICAL INVESTIGATION
+  // =========================================================================
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px", textAlign: "left" }}>
       {/* Floating Bottom-Right Toast Notification */}
@@ -294,6 +894,23 @@ CONFIDENTIAL - CLINICAL CYBERSECURITY AUDIT RECORD - HIPAA / NIST SP 800-61 Rev.
         >
           <ArrowLeft size={16} /> Back to Security Alerts Queue
         </button>
+
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "5px 12px",
+            background: "rgba(255, 255, 255, 0.04)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            borderRadius: "6px",
+            fontSize: "12px",
+            color: "rgba(255, 255, 255, 0.7)",
+          }}
+        >
+          <span>Investigation Scope:</span>
+          <strong style={{ color: "#3ecfcf" }}>{normRole}</strong>
+        </div>
       </div>
 
       {/* Main Incident Overview Header Card */}
@@ -441,6 +1058,107 @@ CONFIDENTIAL - CLINICAL CYBERSECURITY AUDIT RECORD - HIPAA / NIST SP 800-61 Rev.
           </p>
         </div>
       </div>
+
+      {/* Clinical Governance Banner for Life-Critical Medical Devices */}
+      {isMedicalDevice && (
+        <div
+          style={{
+            background: "rgba(245, 158, 11, 0.08)",
+            border: "1px solid rgba(245, 158, 11, 0.3)",
+            borderRadius: "12px",
+            padding: "16px 20px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "14px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "50%",
+                background: "rgba(245, 158, 11, 0.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fbbf24",
+                flexShrink: 0,
+              }}
+            >
+              <HeartPulse size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#ffffff", marginBottom: "2px" }}>
+                Life-Critical Medical Device: {currentAlert.asset}
+              </div>
+              <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.65)" }}>
+                {clinicalApprovalStatus === "Approved"
+                  ? "Clinical IT Admin has authorized autonomous VLAN quarantine. Patient safety verified."
+                  : clinicalApprovalStatus === "Rejected"
+                  ? "Clinical IT Admin has rejected containment. Device must remain online under biomedical supervision."
+                  : "Final autonomous isolation requires clinical safety sign-off from Clinical IT Admin before execution."}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span
+              style={{
+                padding: "5px 12px",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: 700,
+                background:
+                  clinicalApprovalStatus === "Approved"
+                    ? "rgba(16, 185, 129, 0.15)"
+                    : clinicalApprovalStatus === "Rejected"
+                    ? "rgba(239, 68, 68, 0.15)"
+                    : "rgba(245, 158, 11, 0.15)",
+                color:
+                  clinicalApprovalStatus === "Approved"
+                    ? "#34d399"
+                    : clinicalApprovalStatus === "Rejected"
+                    ? "#f87171"
+                    : "#fbbf24",
+                border:
+                  clinicalApprovalStatus === "Approved"
+                    ? "1px solid rgba(16, 185, 129, 0.35)"
+                    : clinicalApprovalStatus === "Rejected"
+                    ? "1px solid rgba(239, 68, 68, 0.35)"
+                    : "1px solid rgba(245, 158, 11, 0.35)",
+              }}
+            >
+              {clinicalApprovalStatus === "Approved"
+                ? "Clinical Sign-off: Approved"
+                : clinicalApprovalStatus === "Rejected"
+                ? "Clinical Sign-off: Rejected"
+                : "Awaiting Clinical IT Admin Sign-off"}
+            </span>
+
+            {isNetworkAdmin && clinicalApprovalStatus === "Pending" && (
+              <button
+                type="button"
+                onClick={handleApproveContainment}
+                style={{
+                  padding: "6px 12px",
+                  background: "#10b981",
+                  color: "#05080a",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Admin Override: Approve
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 2-Column Grid: Target Asset Metadata + AI Causal Analysis */}
       <div
